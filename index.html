@@ -11,7 +11,16 @@
 <meta property="og:description" content="Explore an interactive 3D website demo with animated soda cans, smooth scrolling and creative web design.">
 <meta property="og:image" content="https://images.prismic.io/fizzi/ZswEvEaF0TcGJYaC_OGImage.png?auto=format,compress&rect=0,0,1200,630&w=2400&h=1260"/>
 <link rel="icon" href="icon.svg" type="image/svg+xml"/>
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=alpino@400,500,700,800,900&display=swap"/>
+<link rel="preload" href="fonts/Alpino-Variable.woff2" as="font" type="font/woff2" crossorigin/>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"/>
+<link rel="preload" href="Soda-can.gltf" as="fetch" crossorigin/>
+<style>
+html,body{background:#FDE047;margin:0}
+#page-loader{position:fixed;inset:0;z-index:9999;background:#FDE047;display:flex;align-items:center;justify-content:center;transition:opacity .5s ease,visibility .5s}
+#page-loader.done{opacity:0;visibility:hidden;pointer-events:none}
+#page-loader i{width:44px;height:44px;border:5px solid rgba(7,89,133,.2);border-top-color:#075985;border-radius:50%;animation:ld 0.8s linear infinite}
+@keyframes ld{to{transform:rotate(360deg)}}
+</style>
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script>
 tailwind.config = {
@@ -74,6 +83,7 @@ body {
 </style>
 </head>
 <body class="overflow-x-hidden bg-[#FDE047] text-sky-950">
+<div id="page-loader"><i></i></div>
 
 <!-- Header with Animated Fizzi Wave Logo -->
 <header id="site-header" class="-mb-28 flex justify-center py-4 relative z-50">
@@ -284,6 +294,12 @@ body {
 }
 </script>
 
+<script>
+window.__hideLoader=function(){var l=document.getElementById("page-loader");if(l)l.classList.add("done");var h=document.querySelector(".hero");if(h&&getComputedStyle(h).opacity==="0"&&!window.gsap)h.style.opacity=1;};
+setTimeout(function(){window.__hideLoader();},12000);
+window.addEventListener("error",function(){setTimeout(window.__hideLoader,300);},true);
+window.addEventListener("unhandledrejection",function(){window.__hideLoader();var h=document.querySelector(".hero");if(h)h.style.opacity=1;});
+</script>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -380,16 +396,16 @@ const [gltfData, lobbyEnv, fieldEnv, cloudTexture] = await Promise.all([
   textureLoader.loadAsync('cloud.png')
 ]);
 
-// Flavor Textures
+// Flavor Textures (parallel)
 const flavorTextures = {};
-for (const f of FLAVORS) {
+await Promise.all(FLAVORS.map(async (f) => {
   const tex = await textureLoader.loadAsync(f.textureFile);
   tex.flipY = false;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.generateMipmaps = true;
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   flavorTextures[f.key] = tex;
-}
+}));
 
 // Extract Geometries from Soda-can.gltf
 let cylinderGeom, labelGeom, tabGeom;
@@ -669,7 +685,7 @@ function create3DWord(wordText) {
   ctx.fillText(wordText, 1024, 512);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const mat = new THREE.MeshLambertMaterial({
     map: tex,
     transparent: true,
@@ -960,6 +976,7 @@ function animate() {
 // Render inside GSAP's ticker, after timelines/ScrollTrigger updated this frame
 // -> canvas and DOM scroll positions are always in sync (no jitter).
 gsap.ticker.add(animate);
+window.__hideLoader && window.__hideLoader();
 window.addEventListener('load', () => ScrollTrigger.refresh());
 </script>
 </body>
