@@ -76,6 +76,7 @@ body {
   overflow: hidden;
 }
 #webgl-canvas {
+  background: transparent !important;
   width: 100%;
   height: 100%;
   display: block;
@@ -361,9 +362,14 @@ const renderer = new THREE.WebGLRenderer({
   canvas,
   alpha: true,
   antialias: true,
-  powerPreference: 'high-performance'
+  premultipliedAlpha: true,
+  preserveDrawingBuffer: false
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setClearColor(0x000000, 0);
+const isMobile = window.matchMedia('(max-width: 767px)').matches || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 1.5));
+canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), false);
+canvas.addEventListener('webglcontextrestored', () => location.reload(), false);
 renderer.setSize(window.innerWidth, window.innerHeight, false);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -906,10 +912,10 @@ const carouselViewEl = document.getElementById('carousel-view');
 const altViewEl = document.getElementById('alternating-view');
 
 function renderView(viewElement, viewScene, viewCamera) {
-  if (!viewElement) return;
+  if (!viewElement) return false;
   const rect = viewElement.getBoundingClientRect();
   if (rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth) {
-    return; // Offscreen culling!
+    return false; // Offscreen culling!
   }
 
   const left = Math.round(rect.left);
@@ -925,7 +931,13 @@ function renderView(viewElement, viewScene, viewCamera) {
   viewCamera.updateProjectionMatrix();
 
   renderer.render(viewScene, viewCamera);
+  return true;
 }
+
+const canvasContainerEl = document.getElementById('canvas-container');
+let canvasShown = true;
+canvasContainerEl.style.visibility = 'hidden';
+canvasShown = false;
 
 // Master Render Loop
 const clock = new THREE.Clock();
@@ -963,14 +975,22 @@ function animate() {
 
   // Clear and render each active view
   renderer.setScissorTest(false);
+  renderer.setClearColor(0x000000, 0);
   renderer.clear();
 
+  let drew = false;
   if (window.innerWidth >= 768) {
-    renderView(heroViewEl, heroScene, heroCamera);
+    drew = renderView(heroViewEl, heroScene, heroCamera) || drew;
   }
-  renderView(skyDiveViewEl, skyDiveScene, skyDiveCamera);
-  renderView(carouselViewEl, carouselScene, carouselCamera);
-  renderView(altViewEl, altScene, altCamera);
+  drew = renderView(skyDiveViewEl, skyDiveScene, skyDiveCamera) || drew;
+  drew = renderView(carouselViewEl, carouselScene, carouselCamera) || drew;
+  drew = renderView(altViewEl, altScene, altCamera) || drew;
+
+  // Nothing to show -> hide the fullscreen canvas completely (prevents black overlay on iOS)
+  if (drew !== canvasShown) {
+    canvasShown = drew;
+    canvasContainerEl.style.visibility = drew ? 'visible' : 'hidden';
+  }
 }
 
 // Render inside GSAP's ticker, after timelines/ScrollTrigger updated this frame
